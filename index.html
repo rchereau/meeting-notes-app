@@ -163,6 +163,16 @@ svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.8;stroke
 .content td,.content th{border:1px solid var(--line);padding:6px 9px;text-align:left;vertical-align:top}
 .content img{max-width:100%;height:auto;border-radius:8px;vertical-align:bottom;cursor:default}
 .content img.missing{display:inline-block;min-width:160px;min-height:48px;padding:12px;border:1.5px dashed var(--line);color:var(--muted);font-size:12px}
+.content img::selection{background:transparent}
+.imgframe{position:fixed;z-index:35;display:none;pointer-events:none;outline:2px solid var(--accent);outline-offset:1px;border-radius:8px}
+.imgframe.on{display:block}
+.imgframe .grip{position:absolute;right:-12px;bottom:-12px;width:24px;height:24px;border-radius:50%;background:var(--accent);border:3px solid var(--surface);box-shadow:var(--shadow);cursor:nwse-resize;pointer-events:auto;touch-action:none}
+.imgbar{position:fixed;z-index:36;display:none;align-items:center;gap:2px;padding:3px;border-radius:10px;background:var(--ink);box-shadow:var(--shadow);touch-action:none}
+.imgbar.on{display:flex}
+.imgbar button{border:0;background:none;color:var(--bg);font-size:12px;font-weight:600;padding:5px 9px;border-radius:7px;white-space:nowrap}
+.imgbar button:hover,.imgbar button.on{background:color-mix(in srgb,var(--bg) 24%,transparent)}
+.imgbar .pct{color:var(--bg);opacity:.7;font-size:12px;padding:0 6px 0 4px;min-width:38px;text-align:right;font-variant-numeric:tabular-nums}
+@media (pointer:coarse){.imgframe .grip{width:32px;height:32px;right:-16px;bottom:-16px}.imgbar button{padding:8px 11px}}
 .touch-only{display:none !important}
 @media (pointer:coarse){.touch-only{display:grid !important}}
 .content hr{border:0;border-top:1px solid var(--line);margin:1.4em 0}
@@ -461,6 +471,8 @@ select.in{width:auto;height:36px}
     </div>
   </section>
 </div>
+<div class="imgframe" id="imgFrame"><div class="grip" id="imgGrip" title="Drag to resize"></div></div>
+<div class="imgbar" id="imgBar"><span class="pct" id="imgPct"></span><button data-w="25">25%</button><button data-w="50">50%</button><button data-w="75">75%</button><button data-w="100">100%</button><button data-w="0" title="Original size">Original</button></div>
 <button class="bubble" id="bubble"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M8 12l3 3 5-6"/></svg>Add to to-do</button>
 
 <datalist id="projList"></datalist>
@@ -624,7 +636,7 @@ function hydrateImages(root){
 }
 // note HTML -> editor HTML (no request is made for the relative path) and back
 const toEditorHtml = html => String(html || '').replace(/<img\b([^>]*?)\ssrc="(attachments\/[^"]+)"/gi, '<img$1 data-path="$2"');
-function setEditorHtml(html){ const ed = $('#fContent'); ed.innerHTML = toEditorHtml(html); hydrateImages(ed); }
+function setEditorHtml(html){ const ed = $('#fContent'); hideImgTool(); ed.innerHTML = toEditorHtml(html); hydrateImages(ed); }
 function editorHtml(){
   const ed = $('#fContent');
   if (!ed.querySelector('img[data-path]')) return ed.innerHTML;
@@ -701,6 +713,36 @@ function adoptImages(root){
   }
 }
 
+/* --- resizing: click/tap an image, drag the corner handle or pick a size; width is stored as % of the text width --- */
+let selImg = null;
+function imgBox(img){                          // width of the block the image sits in (what % refers to)
+  let el = img.parentElement;
+  while (el && el !== document.body && !/^(block|list-item|table-cell|flow-root)$/.test(getComputedStyle(el).display)) el = el.parentElement;
+  const cs = getComputedStyle(el);
+  return Math.max(1, el.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight));
+}
+const imgPctNow = img => Math.round(img.getBoundingClientRect().width / imgBox(img) * 100);
+function setImgWidth(img, pct){
+  if (!pct) img.style.removeProperty('width');
+  else img.style.width = Math.round(Math.min(100, Math.max(5, pct))) + '%';
+  if (!img.getAttribute('style')) img.removeAttribute('style');
+}
+function placeImgTool(){
+  const ed = $('#fContent'), f = $('#imgFrame'), bar = $('#imgBar');
+  if (!selImg || !selImg.isConnected || !ed.contains(selImg) || state.view !== 'notes'){ hideImgTool(); return; }
+  const r = selImg.getBoundingClientRect();
+  Object.assign(f.style, { left: r.left + 'px', top: r.top + 'px', width: r.width + 'px', height: r.height + 'px' });
+  const set = (selImg.style.width.match(/^(\d+)%$/) || [])[1];
+  $('#imgPct').textContent = imgPctNow(selImg) + '%';
+  bar.querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.w === (set || '0')));
+  const bw = bar.offsetWidth, bh = bar.offsetHeight;
+  let y = r.top - bh - 10; if (y < 8) y = Math.min(r.bottom + 10, innerHeight - bh - 8);
+  bar.style.left = Math.min(Math.max(r.left + r.width / 2 - bw / 2, 8), innerWidth - bw - 8) + 'px';
+  bar.style.top = y + 'px';
+}
+function showImgTool(img){ selImg = img; $('#imgFrame').classList.add('on'); $('#imgBar').classList.add('on'); placeImgTool(); }
+function hideImgTool(){ selImg = null; $('#imgFrame').classList.remove('on'); $('#imgBar').classList.remove('on'); }
+
 /* =============================== HTML / text conversion =============================== */
 const ALLOWED = new Set('P BR B STRONG I EM U S STRIKE DEL H2 H3 H4 UL OL LI BLOCKQUOTE A CODE PRE TABLE THEAD TBODY TR TD TH MARK IMG HR SUB SUP SPAN'.split(' '));
 const DROP = new Set('SCRIPT STYLE META LINK TITLE IFRAME OBJECT EMBED SVG HEAD NOSCRIPT FORM INPUT BUTTON TEMPLATE'.split(' '));
@@ -741,6 +783,8 @@ function sanitize(html, keepRefs = false){
         else if (IMG_RE.test(s) || /^(data:image\/|https:)/i.test(s)) keep.src = s;
         else { child.remove(); continue; }
         if (child.getAttribute('alt')) keep.alt = child.getAttribute('alt');
+        const w = (child.getAttribute('style') || '').match(/(?:^|;)\s*width:\s*(\d{1,3}(?:\.\d+)?)%/i);
+        if (w && +w[1] >= 5 && +w[1] <= 100) keep.style = `width:${Math.round(+w[1])}%`;
       }
       if (tag === 'TD' || tag === 'TH'){ for (const a of ['colspan','rowspan']) if (child.hasAttribute(a)) keep[a] = child.getAttribute(a); }
       if ((tag === 'UL') && child.classList.contains('checklist')) keep.class = 'checklist';
@@ -967,7 +1011,7 @@ function renderNav(){
 }
 let togglePanels = () => {};
 function setView(v){
-  state.view = v;
+  state.view = v; hideImgTool();
   document.body.classList.toggle('view-todo', v === 'todo');
   document.body.classList.remove('nav-open');
   hideBubble(); renderNav();
@@ -1770,7 +1814,7 @@ function bind(){
   bubble.addEventListener('mousedown', e => e.preventDefault());
   bubble.addEventListener('click', addTodoFromSelection);
   document.addEventListener('selectionchange', debounce(placeBubble, 80));
-  $('#edWrap').addEventListener('scroll', hideBubble);
+  $('#edWrap').addEventListener('scroll', () => { hideBubble(); if (selImg) placeImgTool(); });
   $('#activeFilters').addEventListener('click', e => {
     const b = e.target.closest('.fpill'); if (!b) return;
     const f = state.filter;
@@ -1843,10 +1887,38 @@ function bind(){
   ed.addEventListener('keydown', e => {          // new checklist items start unchecked
     if (e.key === 'Enter') setTimeout(() => { const n = window.getSelection().anchorNode; const li = n && (n.nodeType === 1 ? n : n.parentElement).closest('ul.checklist > li'); if (li && !li.textContent.trim()) li.classList.remove('done'); });
   });
-  ed.addEventListener('click', e => {           // click an image to select it (then Delete removes it)
+  ed.addEventListener('click', e => {           // click an image to select it (then Delete removes it, or resize it)
     if (e.target.tagName !== 'IMG') return;
     const r = document.createRange(); r.selectNode(e.target); const s = getSelection(); s.removeAllRanges(); s.addRange(r);
+    showImgTool(e.target);
   });
+  document.addEventListener('selectionchange', () => {
+    if (!selImg || imgDrag) return;
+    const s = getSelection();
+    if (!s.rangeCount || !s.getRangeAt(0).intersectsNode(selImg) || s.isCollapsed) hideImgTool();
+  });
+  let imgDrag = false;
+  const grip = $('#imgGrip'), bar = $('#imgBar');
+  grip.addEventListener('pointerdown', e => {
+    if (!selImg) return;
+    e.preventDefault(); grip.setPointerCapture(e.pointerId); imgDrag = true;
+    const img = selImg, x0 = e.clientX, w0 = img.getBoundingClientRect().width, box = imgBox(img);
+    const move = ev => { setImgWidth(img, (w0 + ev.clientX - x0) / box * 100); placeImgTool(); };
+    const up = () => {
+      imgDrag = false;
+      grip.removeEventListener('pointermove', move); grip.removeEventListener('pointerup', up); grip.removeEventListener('pointercancel', up);
+      syncContent(); placeImgTool();
+    };
+    grip.addEventListener('pointermove', move); grip.addEventListener('pointerup', up); grip.addEventListener('pointercancel', up);
+  });
+  for (const el of [grip, bar]) el.addEventListener('mousedown', e => e.preventDefault());   // keep the image selected
+  bar.addEventListener('click', e => {
+    const b = e.target.closest('button'); if (!b || !selImg) return;
+    setImgWidth(selImg, +b.dataset.w); syncContent(); placeImgTool();
+  });
+  ed.addEventListener('input', () => { if (selImg) placeImgTool(); });
+  ed.addEventListener('load', e => { if (e.target === selImg) placeImgTool(); }, true);
+  window.addEventListener('resize', () => { if (selImg) placeImgTool(); });
   ed.addEventListener('dblclick', e => { if (e.target.tagName === 'IMG' && e.target.src) window.open(e.target.src, '_blank'); });
   for (const id of ['#imgIn', '#camIn']) $(id).onchange = e => { const f = [...e.target.files]; e.target.value = ''; insertImages(f, imgRange); imgRange = null; };
   $('#toolbar').addEventListener('mousedown', e => e.preventDefault());
