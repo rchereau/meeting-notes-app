@@ -161,18 +161,20 @@ svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.8;stroke
 .content code{font-family:ui-monospace,Consolas,monospace;font-size:.9em;background:var(--line-2);padding:1px 5px;border-radius:5px}
 .content table{border-collapse:collapse;margin:.8em 0;width:100%}
 .content td,.content th{border:1px solid var(--line);padding:6px 9px;text-align:left;vertical-align:top}
-.content img{max-width:100%;height:auto;border-radius:8px;vertical-align:bottom;cursor:default}
+.content img{max-width:100%;height:auto;border-radius:8px;vertical-align:bottom;cursor:default;float:right;clear:right;margin:4px 0 10px 18px}
+.content::after{content:"";display:block;clear:both}
+.content h2,.content h3,.content h4,.content hr{clear:right}
 .content img.missing{display:inline-block;min-width:160px;min-height:48px;padding:12px;border:1.5px dashed var(--line);color:var(--muted);font-size:12px}
 .content img::selection{background:transparent}
 .imgframe{position:fixed;z-index:35;display:none;pointer-events:none;outline:2px solid var(--accent);outline-offset:1px;border-radius:8px}
 .imgframe.on{display:block}
-.imgframe .grip{position:absolute;right:-12px;bottom:-12px;width:24px;height:24px;border-radius:50%;background:var(--accent);border:3px solid var(--surface);box-shadow:var(--shadow);cursor:nwse-resize;pointer-events:auto;touch-action:none}
+.imgframe .grip{position:absolute;left:-12px;bottom:-12px;width:24px;height:24px;border-radius:50%;background:var(--accent);border:3px solid var(--surface);box-shadow:var(--shadow);cursor:nesw-resize;pointer-events:auto;touch-action:none}
 .imgbar{position:fixed;z-index:36;display:none;align-items:center;gap:2px;padding:3px;border-radius:10px;background:var(--ink);box-shadow:var(--shadow);touch-action:none}
 .imgbar.on{display:flex}
 .imgbar button{border:0;background:none;color:var(--bg);font-size:12px;font-weight:600;padding:5px 9px;border-radius:7px;white-space:nowrap}
 .imgbar button:hover,.imgbar button.on{background:color-mix(in srgb,var(--bg) 24%,transparent)}
 .imgbar .pct{color:var(--bg);opacity:.7;font-size:12px;padding:0 6px 0 4px;min-width:38px;text-align:right;font-variant-numeric:tabular-nums}
-@media (pointer:coarse){.imgframe .grip{width:32px;height:32px;right:-16px;bottom:-16px}.imgbar button{padding:8px 11px}}
+@media (pointer:coarse){.imgframe .grip{width:32px;height:32px;left:-16px;bottom:-16px}.imgbar button{padding:8px 11px}}
 .touch-only{display:none !important}
 @media (pointer:coarse){.touch-only{display:grid !important}}
 .content hr{border:0;border-top:1px solid var(--line);margin:1.4em 0}
@@ -1903,7 +1905,7 @@ function bind(){
     if (!selImg) return;
     e.preventDefault(); grip.setPointerCapture(e.pointerId); imgDrag = true;
     const img = selImg, x0 = e.clientX, w0 = img.getBoundingClientRect().width, box = imgBox(img);
-    const move = ev => { setImgWidth(img, (w0 + ev.clientX - x0) / box * 100); placeImgTool(); };
+    const move = ev => { setImgWidth(img, (w0 - (ev.clientX - x0)) / box * 100); placeImgTool(); };   // images sit on the right: dragging left enlarges
     const up = () => {
       imgDrag = false;
       grip.removeEventListener('pointermove', move); grip.removeEventListener('pointerup', up); grip.removeEventListener('pointercancel', up);
