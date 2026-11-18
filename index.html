@@ -261,11 +261,16 @@ select.in{width:auto;height:36px}
 .td-add:focus-within{border-color:var(--accent);border-style:solid}
 .td-add input{flex:1;border:0;outline:0;background:none;height:42px;color:var(--ink)}
 .td-group{margin-top:22px}
-.grp-link{display:flex;align-items:center;gap:10px;width:100%;border:0;background:none;padding:4px 2px 8px;text-align:left;color:var(--ink)}
-.grp-link .gt{font:600 15px var(--serif)}
-.grp-link .gd{font-size:12px;color:var(--muted)}
-.grp-link .go{margin-left:auto;font-size:12px;color:var(--accent);display:inline-flex;align-items:center;gap:4px;opacity:.8}
-.grp-link:hover .gt{text-decoration:underline;text-decoration-color:var(--line)}
+.grp-head{display:flex;align-items:center;flex-wrap:wrap;gap:4px 10px;padding:4px 2px 8px;color:var(--ink)}
+.grp-head .gt{font:600 15px var(--serif);outline:0;border-radius:5px;padding:1px 4px;margin-left:-4px;cursor:text;min-width:2em;word-break:break-word}
+.grp-head .gt:hover{background:var(--line-2)}
+.grp-head .gt:focus{background:var(--surface);box-shadow:0 0 0 2px var(--accent-soft)}
+.grp-head .grename{opacity:0;padding:3px;margin-left:-8px}
+.grp-head:hover .grename,.grp-head .grename:focus{opacity:1}
+@media (pointer:coarse){.grp-head .grename{opacity:.7}}
+.grp-head .gd{font-size:12px;color:var(--muted)}
+.grp-head .go{margin-left:auto;border:0;background:none;padding:2px 4px;border-radius:6px;font-size:12px;color:var(--accent);display:inline-flex;align-items:center;gap:4px;opacity:.85}
+.grp-head .go:hover{opacity:1;text-decoration:underline}
 .grp-plain{font:600 15px var(--serif);padding:4px 2px 8px}
 .todo{display:flex;gap:12px;align-items:flex-start;padding:10px 12px;border:1px solid var(--line-2);border-radius:10px;margin-bottom:6px;background:var(--surface)}
 .todo:hover{border-color:var(--line)}
@@ -276,6 +281,10 @@ select.in{width:auto;height:36px}
 .tbody{flex:1;min-width:0}
 .ttext{outline:0;word-wrap:break-word;border-radius:4px}
 .ttext:focus{box-shadow:0 0 0 2px var(--accent-soft)}
+.ttext.clamp:not(:focus){display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.tmore{border:0;background:none;padding:0;font-size:12px;color:var(--accent);font-weight:500}
+.tmore:hover{text-decoration:underline}
+.todo:has(.ttext:focus) .tmore{display:none}
 .todo.done .ttext{text-decoration:line-through;color:var(--muted)}
 .tmeta{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:4px;font-size:12px;color:var(--muted)}
 .notelink{display:inline-flex;align-items:center;gap:4px;font-size:12px;color:var(--accent);border:0;background:none;padding:0}
@@ -601,7 +610,7 @@ const state = {
   notes: [],
   todos: [],
   view: 'notes',
-  todoFilter: { status: 'open', project: '' },
+  todoFilter: { status: 'open', project: '' }, tdExpanded: new Set(),
   current: null,
   sort: 'desc',
   filter: { q: '', project: null, type: null, tags: new Set(), open: false },
@@ -1090,16 +1099,20 @@ function renderTodos(){
   $('#tdList').innerHTML = keys.map(k => {
     const n = byId.get(k);
     const head = n
-      ? `<button class="grp-link" data-note="${n.id}"><span class="gt">${esc(n.title || 'Untitled meeting')}</span><span class="gd">${fmtDate(n.date)}</span>
+      ? `<div class="grp-head" data-note="${n.id}">
+           <span class="gt" contenteditable="true" spellcheck="true" title="Click to rename the note" data-ph="Untitled meeting">${esc(n.title || 'Untitled meeting')}</span>
+           <button class="ghost grename" data-g="rename" title="Rename the note" aria-label="Rename the note"><svg viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/></svg></button>
+           <span class="gd">${fmtDate(n.date)}</span>
            ${n.project ? `<span class="chip proj" style="--h:${hue(n.project)}">${esc(n.project)}</span>` : ''}${n.type ? `<span class="chip type">${esc(n.type)}</span>` : ''}
-           <span class="go">Open note <svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></span></button>`
+           <button class="go" data-g="open">Open note <svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></button></div>`
       : `<div class="grp-plain">General tasks</div>`;
     const items = groups.get(k).sort((a, b) => a.done - b.done || a.created - b.created).map(t => `
       <div class="todo ${t.done ? 'done' : ''}" data-id="${t.id}">
         <button class="cb" data-a="toggle" aria-label="${t.done ? 'Mark as open' : 'Mark as done'}">${ICON.check}</button>
         <div class="tbody">
-          <div class="ttext" contenteditable="true" spellcheck="true">${esc(t.text)}</div>
+          <div class="ttext${state.tdExpanded.has(t.id) ? '' : ' clamp'}" contenteditable="true" spellcheck="true">${esc(t.text)}</div>
           <div class="tmeta">
+            <button class="tmore" data-a="more" hidden>${state.tdExpanded.has(t.id) ? 'Show less' : 'Show more'}</button>
             ${n ? `<button class="notelink" data-a="jump"><svg viewBox="0 0 24 24"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></svg>Show in note</button>` : ''}
             <span>Added ${new Date(t.created).toLocaleDateString()}</span>
             ${t.done && t.doneAt ? `<span>· done ${new Date(t.doneAt).toLocaleDateString()}</span>` : ''}
@@ -1109,6 +1122,15 @@ function renderTodos(){
       </div>`).join('');
     return `<div class="td-group">${head}${items}</div>`;
   }).join('');
+  document.querySelectorAll('#tdList .todo').forEach(fitTodo);
+}
+// long tasks show their first 3 lines; "Show more" only when the text is actually longer
+function fitTodo(el){
+  const tx = el.querySelector('.ttext'), more = el.querySelector('.tmore'); if (!tx || !more) return;
+  const open = state.tdExpanded.has(el.dataset.id);
+  tx.classList.toggle('clamp', !open);
+  more.textContent = open ? 'Show less' : 'Show more';
+  more.hidden = !open && tx.scrollHeight <= tx.clientHeight + 2;
 }
 
 /* selection bubble */
@@ -1796,17 +1818,37 @@ function bind(){
   $('#tdProject').addEventListener('change', e => { state.todoFilter.project = e.target.value; renderTodos(); });
   $('#tdNew').addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.value.trim()){ addTodo(e.target.value.trim()); e.target.value = ''; } });
   $('#tdList').addEventListener('click', e => {
-    const g = e.target.closest('.grp-link');
-    if (g){ setView('notes'); openNote(g.dataset.note); return; }
+    const g = e.target.closest('[data-g]');
+    if (g){
+      const head = g.closest('.grp-head');
+      if (g.dataset.g === 'open'){ setView('notes'); openNote(head.dataset.note); }
+      else { const tt = head.querySelector('.gt'); tt.focus(); const r = document.createRange(); r.selectNodeContents(tt); getSelection().removeAllRanges(); getSelection().addRange(r); }
+      return;
+    }
     const a = e.target.closest('[data-a]'); if (!a) return;
     const id = a.closest('.todo').dataset.id; const t = state.todos.find(x => x.id === id);
-    if (a.dataset.a === 'toggle') toggleTodo(id);
+    if (a.dataset.a === 'more'){ state.tdExpanded.has(id) ? state.tdExpanded.delete(id) : state.tdExpanded.add(id); fitTodo(a.closest('.todo')); }
+    else if (a.dataset.a === 'toggle') toggleTodo(id);
     else if (a.dataset.a === 'del') removeTodo(id);
     else if (a.dataset.a === 'jump' && t) jumpToTodo(t);
   });
-  $('#tdList').addEventListener('keydown', e => { if (e.target.classList.contains('ttext') && e.key === 'Enter'){ e.preventDefault(); e.target.blur(); } });
+  $('#tdList').addEventListener('keydown', e => {
+    const c = e.target.classList;
+    if ((c.contains('ttext') || c.contains('gt')) && e.key === 'Enter'){ e.preventDefault(); e.target.blur(); }
+    if (c.contains('gt') && e.key === 'Escape'){ const n = state.notes.find(x => x.id === e.target.closest('.grp-head').dataset.note); e.target.textContent = n?.title || 'Untitled meeting'; e.target.blur(); }
+  });
   $('#tdList').addEventListener('focusout', async e => {
+    if (e.target.classList.contains('gt')){             // rename the note from its header
+      const n = state.notes.find(x => x.id === e.target.closest('.grp-head').dataset.note); if (!n) return;
+      const v = e.target.textContent.replace(/\s+/g, ' ').trim();
+      if (!v || v === (n.title || 'Untitled meeting')){ e.target.textContent = n.title || 'Untitled meeting'; return; }
+      n.title = v; await saveNote(n);
+      if (state.current === n.id) $('#fTitle').value = v;
+      renderList(); renderSidebar();
+      return;
+    }
     if (!e.target.classList.contains('ttext')) return;
+    setTimeout(() => { const el = e.target.closest('.todo'); if (el) fitTodo(el); });
     const t = state.todos.find(x => x.id === e.target.closest('.todo').dataset.id);
     const v = e.target.textContent.replace(/\s+/g, ' ').trim();
     if (t && v && v !== t.text){ t.text = v; await DB.put('todos', t); markTodo(t); }
